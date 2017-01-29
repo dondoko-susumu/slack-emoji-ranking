@@ -1,20 +1,20 @@
 package main
 
 import (
-	"os"
-	"log"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
-  "bytes"
 )
 
 var (
 	apiUrl  string = "https://slack.com/api/channels.list"
 	apiUrl2 string = "https://slack.com/api/channels.history"
-  apiUrl3 string = "https://slack.com/api/chat.postMessage"
+	apiUrl3 string = "https://slack.com/api/chat.postMessage"
 )
 
 func main() {
@@ -34,7 +34,6 @@ func main() {
 		return
 	}
 
-	// 関数を抜ける際に必ずresponseをcloseするようにdeferでcloseを呼ぶ
 	defer resp.Body.Close()
 
 	channelList := &ChannelListResponse{}
@@ -57,27 +56,27 @@ func main() {
 	}
 
 	sort.Sort(order)
-  var text string
+	var text string
 	for idx, entry := range order {
-		text += fmt.Sprintf("%v位 :%s: %v\n",idx +1 , entry.name , entry.value)
+		text += fmt.Sprintf("%v :%s: %v\n", idx+1, entry.name, entry.value)
 	}
 
-  fmt.Println(text)
-  //sendMessage(token,text)
+	fmt.Println(text)
+	//sendMessage(token,text)
 }
 
 func sendMessage(token string, text string) {
-  data := url.Values{}
-  data.Set("token",token)
-  data.Add("channel","#general")
-  data.Add("text", text)
+	data := url.Values{}
+	data.Set("token", token)
+	data.Add("channel", "#general")
+	data.Add("text", text)
 
-  client := &http.Client{}
-  r, _ := http.NewRequest("POST",  fmt.Sprintf("%s",apiUrl3), bytes.NewBufferString(data.Encode()))
-  r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	client := &http.Client{}
+	r, _ := http.NewRequest("POST", fmt.Sprintf("%s", apiUrl3), bytes.NewBufferString(data.Encode()))
+	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-  resp, _ := client.Do(r)
-  fmt.Println(resp.Status)
+	resp, _ := client.Do(r)
+	fmt.Println(resp.Status)
 }
 
 func GetChannelHistory(token string, channelID string, total map[string]int) (error, map[string]int) {
@@ -92,7 +91,6 @@ func GetChannelHistory(token string, channelID string, total map[string]int) (er
 		return err, total
 	}
 
-	// 関数を抜ける際に必ずresponseをcloseするようにdeferでcloseを呼ぶ
 	defer resp.Body.Close()
 
 	channelHistory := &ChannelHistoryResponse{}
