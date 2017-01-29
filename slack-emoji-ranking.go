@@ -44,11 +44,15 @@ func main() {
 	}
 
 	total := SafeCounter{v: make(map[string]int)}
+	wg := sync.WaitGroup{}
 
 	for _, c := range channelList.Channels {
+		wg.Add(1)
 		fmt.Println(c.ID, c.Name)
-		_ = GetChannelHistory(token, c.ID, &total)
+		go GetChannelHistory(token, c.ID, &total, &wg)
 	}
+
+	wg.Wait()
 
 	order := List{}
 	for k, v := range total.v {
@@ -63,10 +67,12 @@ func main() {
 	}
 
 	fmt.Println(text)
-	//sendMessage(token,text)
+	sendMessage(token, text)
 }
 
-func GetChannelHistory(token string, channelID string, total *SafeCounter) error {
+func GetChannelHistory(token string, channelID string, total *SafeCounter, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
 	values := url.Values{}
 	values.Set("token", token)
 	values.Add("channel", channelID)
