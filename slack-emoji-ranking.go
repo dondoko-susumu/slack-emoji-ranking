@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"sync"
 )
 
 var (
@@ -22,8 +23,6 @@ func main() {
 	if token == "" {
 		log.Fatal("SLACK_TOKEN environment variable should be set")
 	}
-
-	total := make(map[string]int)
 
 	values := url.Values{}
 	values.Set("token", token)
@@ -44,13 +43,15 @@ func main() {
 		return
 	}
 
+	total := SafeCounter{v: make(map[string]int)}
+
 	for _, c := range channelList.Channels {
 		fmt.Println(c.ID, c.Name)
-		_, total = GetChannelHistory(token, c.ID, total)
+		_ = GetChannelHistory(token, c.ID, &total)
 	}
 
 	order := List{}
-	for k, v := range total {
+	for k, v := range total.v {
 		e := Entry{k, v}
 		order = append(order, e)
 	}
@@ -65,6 +66,39 @@ func main() {
 	//sendMessage(token,text)
 }
 
+func GetChannelHistory(token string, channelID string, total *SafeCounter) error {
+	values := url.Values{}
+	values.Set("token", token)
+	values.Add("channel", channelID)
+	values.Add("count", "1000")
+
+	resp, err := http.Get(apiUrl2 + "?" + values.Encode())
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	channelHistory := &ChannelHistoryResponse{}
+	err = json.NewDecoder(resp.Body).Decode(channelHistory)
+
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	for _, m := range channelHistory.Messages {
+		//fmt.Println(m.User, m.Text)
+		for _, r := range m.Reactions {
+			//fmt.Println(r.Name, r.Count)
+			total.Inc(r.Name, r.Count)
+		}
+	}
+
+	return nil
+}
+
 func sendMessage(token string, text string) {
 	data := url.Values{}
 	data.Set("token", token)
@@ -77,39 +111,6 @@ func sendMessage(token string, text string) {
 
 	resp, _ := client.Do(r)
 	fmt.Println(resp.Status)
-}
-
-func GetChannelHistory(token string, channelID string, total map[string]int) (error, map[string]int) {
-	values := url.Values{}
-	values.Set("token", token)
-	values.Add("channel", channelID)
-	values.Add("count", "1000")
-
-	resp, err := http.Get(apiUrl2 + "?" + values.Encode())
-	if err != nil {
-		fmt.Println(err)
-		return err, total
-	}
-
-	defer resp.Body.Close()
-
-	channelHistory := &ChannelHistoryResponse{}
-	err = json.NewDecoder(resp.Body).Decode(channelHistory)
-
-	if err != nil {
-		fmt.Println(err)
-		return err, total
-	}
-
-	for _, m := range channelHistory.Messages {
-		//fmt.Println(m.User, m.Text)
-		for _, r := range m.Reactions {
-			//fmt.Println(r.Name, r.Count)
-			total[r.Name] = total[r.Name] + r.Count
-		}
-	}
-
-	return nil, total
 }
 
 type Response struct {
@@ -178,4 +179,26 @@ func (l List) Less(i, j int) bool {
 	} else {
 		return (l[i].value > l[j].value)
 	}
+}
+
+// SafeCounter is safe to use concurrently.
+type SafeCounter struct {
+	v   map[string]int
+	mux sync.Mutex
+}
+
+// Inc increments the counter for the given key.
+func (c *SafeCounter) Inc(key string, cnt int) {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access the map c.v.
+	c.v[key] = c.v[key] + cnt
+	c.mux.Unlock()
+}
+
+// Value returns the current value of the counter for the given key.
+func (c *SafeCounter) Value(key string) int {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access the map c.v.
+	defer c.mux.Unlock()
+	return c.v[key]
 }
