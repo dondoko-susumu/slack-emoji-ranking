@@ -190,8 +190,12 @@ func (l List) Less(i, j int) bool {
 // SafeCounter is safe to use concurrently.
 type SafeCounter struct {
 	v   map[string]int
+	c   map[string]map[string]int
 	mux sync.Mutex
 }
+
+// TODO:
+// see http://qiita.com/daigo2010/items/d46975ad6decd8578c45
 
 // Inc increments the counter for the given key.
 func (c *SafeCounter) Inc(key string, cnt int) {
@@ -201,10 +205,24 @@ func (c *SafeCounter) Inc(key string, cnt int) {
 	c.mux.Unlock()
 }
 
+func (c *SafeCounter) ChannelInc(channel string, key string, cnt int) {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access the map c.v.
+	c.c[channel][key] = c.c[channel][key] + cnt
+	c.mux.Unlock()
+}
+
 // Value returns the current value of the counter for the given key.
 func (c *SafeCounter) Value(key string) int {
 	c.mux.Lock()
 	// Lock so only one goroutine at a time can access the map c.v.
 	defer c.mux.Unlock()
 	return c.v[key]
+}
+
+func (c *SafeCounter) ChannelValue(channel string, key string) int {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access the map c.v.
+	defer c.mux.Unlock()
+	return c.c[channel][key]
 }
