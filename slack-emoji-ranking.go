@@ -46,31 +46,59 @@ func main() {
 	total := SafeCounter{v: make(map[string]int)}
 	wg := sync.WaitGroup{}
 
+	total.c = make(map[string]map[string]int)
 	for _, c := range channelList.Channels {
 		wg.Add(1)
 		fmt.Println(c.ID, c.Name)
-		go GetChannelHistory(token, c.ID, &total, &wg)
+		total.makeChannelInc(c.Name)
+		go GetChannelHistory(token, c.ID, c.Name, &total, &wg)
 	}
 
 	wg.Wait()
 
-	order := List{}
+	orderTotal := List{}
 	for k, v := range total.v {
 		e := Entry{k, v}
-		order = append(order, e)
+		orderTotal = append(orderTotal, e)
 	}
 
-	sort.Sort(order)
+	sort.Sort(orderTotal)
+
 	var text string
-	for idx, entry := range order {
+	text += fmt.Sprintf("Total\n")
+	var i = 0
+	for idx, entry := range orderTotal {
 		text += fmt.Sprintf("%v :%s: %v\n", idx+1, entry.name, entry.value)
+		i++
+		if i == 20 {
+			break
+		}
+	}
+
+	for c, cv := range total.c {
+		var order = List{}
+		for k, v := range cv {
+			e := Entry{k, v}
+			order = append(order, e)
+		}
+		sort.Sort(order)
+
+		text += fmt.Sprintf("\n#%s\n", c)
+		var i = 0
+		for idx, entry := range order {
+			text += fmt.Sprintf("%v :%s: %v\n", idx+1, entry.name, entry.value)
+			i++
+			if i == 5 {
+				break
+			}
+		}
 	}
 
 	fmt.Println(text)
 	sendMessage(token, text)
 }
 
-func GetChannelHistory(token string, channelID string, total *SafeCounter, wg *sync.WaitGroup) error {
+func GetChannelHistory(token string, channelID string, channelName string, total *SafeCounter, wg *sync.WaitGroup) error {
 	defer wg.Done()
 
 	values := url.Values{}
@@ -99,6 +127,7 @@ func GetChannelHistory(token string, channelID string, total *SafeCounter, wg *s
 		for _, r := range m.Reactions {
 			//fmt.Println(r.Name, r.Count)
 			total.Inc(r.Name, r.Count)
+			total.ChannelInc(channelName, r.Name, r.Count)
 		}
 	}
 
@@ -194,7 +223,6 @@ type SafeCounter struct {
 	mux sync.Mutex
 }
 
-// TODO:
 // see http://qiita.com/daigo2010/items/d46975ad6decd8578c45
 
 // Inc increments the counter for the given key.
@@ -202,6 +230,13 @@ func (c *SafeCounter) Inc(key string, cnt int) {
 	c.mux.Lock()
 	// Lock so only one goroutine at a time can access the map c.v.
 	c.v[key] = c.v[key] + cnt
+	c.mux.Unlock()
+}
+
+func (c *SafeCounter) makeChannelInc(channel string) {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access the map c.v.
+	c.c[channel] = make(map[string]int)
 	c.mux.Unlock()
 }
 
