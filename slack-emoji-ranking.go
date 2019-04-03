@@ -74,7 +74,6 @@ func main() {
 			break
 		}
 	}
-
 	for c, cv := range total.c {
 		var order = List{}
 		for k, v := range cv {
@@ -93,9 +92,16 @@ func main() {
 			}
 		}
 	}
-
 	fmt.Println(text)
-	sendMessage(token, text)
+
+	channel := os.Getenv("SLACK_SEND_CHANNEL")
+	if channel == "" {
+		channel = "general"
+	}
+
+	fmt.Println("Send Channel: " + channel)
+
+	sendMessage(token, text, channel)
 }
 
 func GetChannelHistory(token string, channelID string, channelName string, total *SafeCounter, wg *sync.WaitGroup) error {
@@ -134,10 +140,10 @@ func GetChannelHistory(token string, channelID string, channelName string, total
 	return nil
 }
 
-func sendMessage(token string, text string) {
+func sendMessage(token string, text string, channel string) {
 	data := url.Values{}
 	data.Set("token", token)
-	data.Add("channel", "#general")
+	data.Add("channel", "#"+channel)
 	data.Add("text", text)
 
 	client := &http.Client{}
