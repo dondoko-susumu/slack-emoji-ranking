@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	apiUrl  string = "https://slack.com/api/channels.list"
-	apiUrl2 string = "https://slack.com/api/channels.history"
+	apiUrl  string = "https://slack.com/api/conversations.list"
+	apiUrl2 string = "https://slack.com/api/conversations.history"
 	apiUrl3 string = "https://slack.com/api/chat.postMessage"
 )
 
@@ -25,9 +25,15 @@ func main() {
 	}
 
 	values := url.Values{}
-	values.Set("token", token)
+	values.Set("exclude_archived", "true")
+	values.Add("limit", "1000")
 
-	resp, err := http.Get(apiUrl + "?" + values.Encode())
+	req, _ := http.NewRequest("GET", apiUrl+"?"+values.Encode(), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Add("Content-type", "application/json")
+	client := new(http.Client)
+	resp, err := client.Do(req)
+
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -75,20 +81,23 @@ func main() {
 		}
 	}
 	for c, cv := range total.c {
-		var order = List{}
-		for k, v := range cv {
-			e := Entry{k, v}
-			order = append(order, e)
-		}
-		sort.Sort(order)
+		if len(cv) > 0 {
+			var order = List{}
+			for k, v := range cv {
+				e := Entry{k, v}
+				order = append(order, e)
+			}
+			sort.Sort(order)
 
-		text += fmt.Sprintf("\n#%s\n", c)
-		var i = 0
-		for idx, entry := range order {
-			text += fmt.Sprintf("%v :%s: %v\n", idx+1, entry.name, entry.value)
-			i++
-			if i == 5 {
-				break
+			text += fmt.Sprintf("\n#%s\n", c)
+
+			var i = 0
+			for idx, entry := range order {
+				text += fmt.Sprintf("%v :%s: %v\n", idx+1, entry.name, entry.value)
+				i++
+				if i == 5 {
+					break
+				}
 			}
 		}
 	}
@@ -108,11 +117,15 @@ func GetChannelHistory(token string, channelID string, channelName string, total
 	defer wg.Done()
 
 	values := url.Values{}
-	values.Set("token", token)
-	values.Add("channel", channelID)
-	values.Add("count", "1000")
+	values.Set("channel", channelID)
+	values.Add("limit", "1000")
 
-	resp, err := http.Get(apiUrl2 + "?" + values.Encode())
+	req, _ := http.NewRequest("GET", apiUrl2+"?"+values.Encode(), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Add("Content-type", "application/json")
+	client := new(http.Client)
+	resp, err := client.Do(req)
+
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -142,15 +155,15 @@ func GetChannelHistory(token string, channelID string, channelName string, total
 
 func sendMessage(token string, text string, channel string) {
 	data := url.Values{}
-	data.Set("token", token)
-	data.Add("channel", "#"+channel)
+	data.Set("channel", "#"+channel)
 	data.Add("text", text)
 
 	client := &http.Client{}
-	r, _ := http.NewRequest("POST", fmt.Sprintf("%s", apiUrl3), bytes.NewBufferString(data.Encode()))
-	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req, _ := http.NewRequest("POST", fmt.Sprintf("%s", apiUrl3), bytes.NewBufferString(data.Encode()))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, _ := client.Do(r)
+	resp, _ := client.Do(req)
 	fmt.Println(resp.Status)
 }
 
